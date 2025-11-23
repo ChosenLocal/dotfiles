@@ -1,0 +1,24 @@
+# ============================================
+# WOFI - CATPPUCCIN MOCHA THEME
+# ============================================
+
+# Behavior
+show=drun
+prompt=Search:
+allow_images=true
+allow_markup=true
+insensitive=true
+no_actions=true
+
+# Appearance
+width=600
+height=400
+location=center
+orientation=vertical
+halign=fill
+columns=1
+
+# Styling
+layer=overlay
+term=kitty
+gtk_dark=true

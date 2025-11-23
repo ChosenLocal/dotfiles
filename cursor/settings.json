@@ -1,0 +1,64 @@
+{
+  "window.commandCenter": true,
+  "workbench.colorTheme": "Cursor Dark High Contrast",
+  "editor.formatOnSave": true,
+  "cursor.yolo.useYoloMode": true,
+  "cursor.yolo.yoloPrompt": "Use YOLO for automated test/build runs. Do not install deps. Do not delete files. Ask before destructive changes.",
+  "cursor.yolo.yoloCommandAllowlist": [
+    "npm test",
+    "npm run lint",
+    "npm run build",
+    "vitest",
+    "jest",
+    "pytest",
+    "docker build ."
+  ],
+  "cursor.yolo.yoloCommandDenylist": [
+    "npm install",
+    "pnpm add",
+    "yarn add",
+    "pip install",
+    "rm -rf",
+    "find .* -delete",
+    "drop table",
+    "migrate",
+    "curl",
+    "wget"
+  ],
+  "cursor.yolo.yoloDeleteFileDisabled": true,
+  "cursor.yolo.yoloDotFilesDisabled": true,
+  "cursor.yolo.yoloOutsideWorkspaceDisabled": true,
+  "cursor.yolo.yoloMcpToolsDisabled": true,
+  "cursor.yolo.yoloEnableRunEverything": false,
+  "cursor.yolo.doNotShowYoloModeWarningAgain": false,
+  "cursor.yolo.doNotShowFullYoloModeWarningAgain": false,
+  "[javascript]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode",
+    "editor.formatOnSave": true
+  },
+  "[javascriptreact]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode",
+    "editor.formatOnSave": true
+  },
+  "[typescript]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode",
+    "editor.formatOnSave": true
+  },
+  "[typescriptreact]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode",
+    "editor.formatOnSave": true
+  },
+  "[json]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode",
+    "editor.formatOnSave": true
+  },
+  "[jsonc]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode",
+    "editor.formatOnSave": true
+  },
+  "[markdown]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode",
+    "editor.formatOnSave": true
+  },
+  "cursor.composer.shouldAllowCustomModes": true
+}

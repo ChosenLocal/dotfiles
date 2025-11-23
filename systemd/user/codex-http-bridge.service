@@ -1,0 +1,27 @@
+[Unit]
+Description=Codex System Assistant HTTP Bridge
+Documentation=https://github.com/anthropics/claude-code
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=/home/jack/codex-sys
+ExecStart=/home/jack/codex-sys/http-bridge/venv/bin/python /home/jack/codex-sys/http-bridge/server.py
+Restart=on-failure
+RestartSec=5s
+
+# Environment
+Environment="PATH=/home/jack/.local/bin:/usr/local/bin:/usr/bin"
+Environment="PYTHONUNBUFFERED=1"
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=codex-bridge
+
+# Security (running as user service, so these are reasonable)
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=default.target

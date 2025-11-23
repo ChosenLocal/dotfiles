@@ -1,0 +1,42 @@
+{
+  "models": [
+    {
+      "title": "Llama 3.1 70B",
+      "provider": "ollama",
+      "model": "llama3.1:70b-instruct-q4_K_M",
+      "apiBase": "http://localhost:11434"
+    },
+    {
+      "title": "CodeLlama 34B",
+      "provider": "ollama",
+      "model": "codellama:34b-instruct",
+      "apiBase": "http://localhost:11434"
+    }
+  ],
+  "tabAutocompleteModel": {
+    "title": "CodeLlama Autocomplete",
+    "provider": "ollama",
+    "model": "codellama:34b-instruct",
+    "apiBase": "http://localhost:11434"
+  },
+  "embeddingsProvider": {
+    "provider": "ollama",
+    "model": "nomic-embed-text",
+    "apiBase": "http://localhost:11434"
+  },
+  "allowAnonymousTelemetry": false,
+  "customCommands": [
+    {
+      "name": "test",
+      "prompt": "Write a comprehensive set of unit tests for the selected code"
+    },
+    {
+      "name": "explain",
+      "prompt": "Explain what the following code does in detail"
+    },
+    {
+      "name": "optimize",
+      "prompt": "Optimize this code for better performance and readability"
+    }
+  ]
+}

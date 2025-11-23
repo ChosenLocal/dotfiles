@@ -1,0 +1,17 @@
+[Unit]
+Description=Daily System Maintenance Timer
+Documentation=man:systemd.timer(5)
+Requires=system-maintenance.service
+
+[Timer]
+# Run daily at 3 AM
+OnCalendar=*-*-* 03:00:00
+# Also run 10 minutes after boot
+OnBootSec=10min
+# If the system was off during scheduled time, run as soon as possible
+Persistent=true
+# Randomize start time by up to 1 hour to reduce load spikes
+RandomizedDelaySec=3600
+
+[Install]
+WantedBy=timers.target

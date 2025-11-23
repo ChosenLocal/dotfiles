@@ -1,0 +1,86 @@
+# warpd configuration - keyboard-driven mouse control
+# Theme: Catppuccin Mocha
+# Created: 2025-11-22
+
+#-- HINT MODE SETTINGS --#
+# Hint mode: Click on elements using keyboard shortcuts
+# Characters prioritized from home row for optimal typing speed
+hint_chars: asdfjklgh
+
+# Hint visual styling (Catppuccin Mocha mauve accents)
+hint_size: 16
+hint_bgcolor: #cba6f7
+hint_fgcolor: #1e1e2e
+hint_border_color: #89b4fa
+hint_border_width: 2
+
+# Hint activation mode
+# oneshot: exit after single click (default)
+# persistent: stay in hint mode after click
+hint_mode: oneshot
+
+#-- GRID MODE SETTINGS --#
+# Grid mode: Divide screen into zones for quick navigation
+# 2 = 2x2 grid (4 zones), 3 = 3x3 grid (9 zones), 4 = 4x4 (16 zones)
+grid_size: 3
+
+# Grid visual styling (Catppuccin Mocha blue)
+grid_color: #89b4fa
+grid_at_cursor: false
+
+#-- NORMAL MODE SETTINGS --#
+# Normal mode: Vi-style hjkl navigation for precise pointer control
+# Movement keys (default: h=left, j=down, k=up, l=right)
+# These are already default, but listed for documentation
+
+# Scroll settings in normal mode
+scroll_speed: 20
+scroll_down: d
+scroll_up: u
+
+# Speed multipliers
+speed: 220
+max_speed: 1200
+acceleration: 700
+
+# Mouse button bindings in normal mode
+# Defaults: m=left click, n=middle click, ,=right click
+# Additional options available: see man warpd
+
+#-- COLORS --#
+# Crosshair color in normal mode (Catppuccin Mocha mauve)
+cursor_color: #cba6f7
+
+# Background overlay (Catppuccin Mocha base with transparency)
+# Format: #RRGGBBAA (last 2 digits = alpha/transparency)
+background_color: #1e1e2e99
+
+#-- ONESHOT MODE --#
+# Oneshot mode: Quick activation for single action then exit
+# Useful for occasional mouse needs without mode switching
+oneshot_buttons: n - /
+
+#-- MISC SETTINGS --#
+# Exit warpd if no input for N seconds (0 = disabled)
+oneshot_timeout: 0
+
+# Screen edge behavior
+# scroll: scroll when hitting screen edges
+# none: stop at edges (default)
+screen_edge_behavior: none
+
+# History: Remember last position when re-entering mode
+hint_history_length: 50
+
+#-- ADVANCED --#
+# Drag mode settings (1=left, 2=middle, 3=right button)
+drag_button: 1
+
+# Copy selection (X11 only, Wayland uses compositor)
+# Default: Mod1+c (Alt+c) to copy hint target
+
+# Repeat rate for held keys (ms between repeats)
+repeat_interval: 20
+
+# Initial delay before key repeat starts (ms)
+repeat_delay: 300

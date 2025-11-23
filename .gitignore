@@ -19,3 +19,37 @@
 
 # Local overrides
 *.local
+
+# Runtime data and databases
+*.dat
+*.db
+*.sqlite
+*.sqlite3
+
+# API keys and tokens
+*token*
+*hosts.yml
+.claude.json
+
+# Cloud storage credentials
+rclone.conf
+
+# AGS generated files
+ags/node_modules/
+ags/@girs/
+
+# CopyQ clipboard data
+copyq/*.dat
+copyq/copyq_tab_*
+
+# GTK assets (theme-specific)
+gtk-3.0/assets/
+gtk-4.0/assets/
+
+# Atuin sync data
+atuin/*.db
+atuin/key
+
+# Mise downloads
+mise/downloads/
+mise/installs/

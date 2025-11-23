@@ -1,0 +1,12 @@
+[Unit]
+Description=CopyQ Clipboard Manager
+After=graphical-session.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/copyq
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=default.target

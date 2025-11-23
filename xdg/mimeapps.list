@@ -1,0 +1,15 @@
+[Default Applications]
+application/pdf=sioyek.desktop
+x-scheme-handler/figma=figma-linux.desktop
+text/html=vivaldi-stable.desktop
+x-scheme-handler/http=vivaldi-stable.desktop
+x-scheme-handler/https=vivaldi-stable.desktop
+x-scheme-handler/about=vivaldi-stable.desktop
+x-scheme-handler/unknown=vivaldi-stable.desktop
+x-scheme-handler/mailto=mailspring.desktop
+x-scheme-handler/mailspring=Mailspring.desktop
+x-scheme-handler/postman=Postman.desktop
+application/x-zerosize=libreoffice-writer.desktop
+
+[Added Associations]
+application/x-zerosize=libreoffice-writer.desktop;

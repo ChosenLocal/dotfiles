@@ -1,0 +1,13 @@
+[Unit]
+Description=System Maintenance Tasks
+Documentation=man:systemd.service(5)
+
+[Service]
+Type=oneshot
+ExecStart=/home/jack/.local/bin/system-maintenance
+StandardOutput=journal
+StandardError=journal
+
+# Security hardening
+PrivateTmp=yes
+NoNewPrivileges=yes

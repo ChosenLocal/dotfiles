@@ -1,0 +1,8 @@
+
+! Clipboard settings for large data handling
+*VT100.translations: #override \
+    Ctrl Shift <Key>V: insert-selection(CLIPBOARD) \n\
+    Ctrl Shift <Key>C: copy-selection(CLIPBOARD)
+*selectToClipboard: true
+*maximumClipboard: 100000
+
