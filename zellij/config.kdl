@@ -1,0 +1,115 @@
+// =============================================================================
+// Zellij Configuration
+// =============================================================================
+
+// Theme
+theme "catppuccin-mocha"
+
+// Default shell
+default_shell "zsh"
+
+// Pane frames
+pane_frames false
+
+// Copy on select
+copy_on_select true
+
+// Copy command (for Wayland)
+copy_command "wl-copy"
+
+// Scroll buffer size
+scroll_buffer_size 10000
+
+// Mouse mode
+mouse_mode true
+
+// UI settings
+simplified_ui false
+default_mode "normal"
+
+// Session serialization (save/restore sessions)
+session_serialization true
+
+// Auto layout
+auto_layout true
+
+// Layout directory
+layout_dir "/home/jack/dotfiles/zellij/layouts"
+
+// Keybindings
+keybinds {
+    normal {
+        // Session management
+        bind "Ctrl s" {
+            SwitchToMode "session";
+        }
+
+        // Enter copy/scroll mode (vim-like selection)
+        bind "Ctrl b" {
+            SwitchToMode "scroll";
+        }
+
+        // Quick copy mode toggle
+        bind "Alt c" {
+            SwitchToMode "scroll";
+        }
+
+        // Quick attach to sessions
+        bind "Alt 1" {
+            GoToTab 1;
+        }
+        bind "Alt 2" {
+            GoToTab 2;
+        }
+        bind "Alt 3" {
+            GoToTab 3;
+        }
+        bind "Alt 4" {
+            GoToTab 4;
+        }
+        bind "Alt [" {
+            GoToNextTab;
+        }
+        bind "Alt ]" {
+            GoToPreviousTab;
+        }
+    }
+
+    scroll {
+        bind "Ctrl c" { ScrollToBottom; SwitchToMode "normal"; }
+        bind "q" { ScrollToBottom; SwitchToMode "normal"; }
+        bind "Esc" { ScrollToBottom; SwitchToMode "normal"; }
+        bind "j" { ScrollDown; }
+        bind "k" { ScrollUp; }
+        bind "d" { HalfPageScrollDown; }
+        bind "u" { HalfPageScrollUp; }
+        bind "g" { ScrollToTop; }
+        bind "G" { ScrollToBottom; }
+        bind "/" { SwitchToMode "search"; }
+        bind "v" { SwitchToMode "select"; }
+        bind "y" { Copy; ScrollToBottom; SwitchToMode "normal"; }
+    }
+
+    search {
+        bind "Esc" { SwitchToMode "scroll"; }
+        bind "Enter" { SwitchToMode "scroll"; }
+    }
+
+    shared_except "locked" {
+        bind "Ctrl q" { Quit; }
+        bind "Alt n" { NewPane; }
+        bind "Alt h" "Alt Left" { MoveFocusOrTab "Left"; }
+        bind "Alt l" "Alt Right" { MoveFocusOrTab "Right"; }
+        bind "Alt j" "Alt Down" { MoveFocus "Down"; }
+        bind "Alt k" "Alt Up" { MoveFocus "Up"; }
+        bind "Alt r" { ReloadConfig; }
+    }
+}
+
+// Plugins
+plugins {
+    tab-bar { path "tab-bar"; }
+    status-bar { path "status-bar"; }
+    strider { path "strider"; }
+    compact-bar { path "compact-bar"; }
+}

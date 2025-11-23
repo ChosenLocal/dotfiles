@@ -1,0 +1,40 @@
+@import "/home/jack/.config/rofi/colors-catppuccin-mocha.rasi"
+
+configuration {
+    show-icons: false;
+    disable-history: true;
+    font: "Monaco 11";
+}
+
+window {
+    location: center;
+    width: 320;
+    border: 2px;
+    border-color: @borderc;
+    background-color: @bgal;
+    padding: 12px;
+    children: [mainbox];
+}
+
+mainbox {
+    orientation: vertical;
+    spacing: 10px;
+}
+
+listview {
+    columns: 1;
+    lines: 6;
+    spacing: 8px;
+}
+
+element {
+    padding: 10px;
+    border-radius: @rad;
+    background-color: @bg;
+}
+
+element selected {
+    background-color: alpha(@accent, 0.18);
+    border: 1;
+    border-color: @accent;
+}

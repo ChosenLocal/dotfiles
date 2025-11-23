@@ -1,0 +1,63 @@
+// =============================================================================
+// Zellij Layout: infra
+// Context: Infrastructure, servers, homelab, networking
+// =============================================================================
+
+layout {
+    default_tab_template {
+        pane size=1 borderless=true {
+            plugin location="zellij:tab-bar"
+        }
+        children
+        pane size=2 borderless=true {
+            plugin location="zellij:status-bar"
+        }
+    }
+
+    tab name="infra" {
+        pane split_direction="vertical" {
+            // Left: Shell (50% width)
+            pane size="50%" {
+                name "shell"
+                focus true
+            }
+
+            // Right side split into three
+            pane split_direction="horizontal" size="50%" {
+                // Top-right: System monitor
+                pane size="33%" {
+                    name "monitor"
+                    command "btop"
+                }
+
+                // Middle-right: GPU monitor
+                pane size="33%" {
+                    name "gpu"
+                    command "nvtop"
+                }
+
+                // Bottom-right: Logs/SSH
+                pane size="34%" {
+                    name "logs"
+                }
+            }
+        }
+    }
+
+    tab name="cmd" {
+        pane split_direction="vertical" {
+            pane size="65%" {
+                name "ops"
+                focus true
+            }
+            pane split_direction="horizontal" size="35%" {
+                pane size="50%" {
+                    name "ssh-a"
+                }
+                pane size="50%" {
+                    name "ssh-b"
+                }
+            }
+        }
+    }
+}

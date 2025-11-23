@@ -1,0 +1,21 @@
+# Sensitive files
+*.secret
+*.env
+*.key
+*.pem
+*_rsa
+*_dsa
+*_ecdsa
+*_ed25519
+
+# History files
+.zsh_history
+.bash_history
+.atuin_history
+
+# Cache files
+*.cache
+.zcompdump*
+
+# Local overrides
+*.local

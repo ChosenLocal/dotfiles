@@ -1,0 +1,128 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+show_help() {
+  cat <<'EOF'
+Usage: new-client "Client Name" [--slug custom-slug] [--dry-run]
+
+Creates a client workspace under ~/Desktop/main/ChosenLocal/clients with the standard subfolders:
+  project-repo/   Code for the website/app
+  business-info/  Requirements, contracts, pricing, ops docs
+  media/          Assets (images/video/audio/exports)
+  plan/           Roadmaps, schedules, and sprint plans
+  notes/          Meetings and scratch notes
+
+Options:
+  --slug       Override the derived folder name (lowercase, kebab suggested)
+  --dry-run    Show actions without creating anything
+  -h, --help   Show this help
+EOF
+}
+
+slugify() {
+  local input="$1"
+  input="${input,,}"
+  input="$(printf '%s' "$input" | tr -cs '[:alnum:]' '-')"
+  input="${input#-}"
+  input="${input%-}"
+  echo "$input"
+}
+
+name=""
+slug=""
+dry_run=0
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    -h|--help)
+      show_help
+      exit 0
+      ;;
+    --slug)
+      slug="${2-}"
+      if [[ -z "$slug" ]]; then
+        echo "Missing value for --slug" >&2
+        exit 1
+      fi
+      shift 2
+      ;;
+    --dry-run)
+      dry_run=1
+      shift
+      ;;
+    *)
+      if [[ -z "$name" ]]; then
+        name="$1"
+        shift
+      else
+        echo "Unexpected argument: $1" >&2
+        show_help
+        exit 1
+      fi
+      ;;
+  esac
+done
+
+if [[ -z "$name" ]]; then
+  show_help
+  exit 1
+fi
+
+base_dir="$HOME/Desktop/main/ChosenLocal/clients"
+[[ -d "$base_dir" ]] || mkdir -p "$base_dir"
+
+if [[ -z "$slug" ]]; then
+  slug="$(slugify "$name")"
+fi
+
+if [[ -z "$slug" ]]; then
+  echo "Failed to derive a folder name from: $name" >&2
+  exit 1
+fi
+
+client_dir="$base_dir/$slug"
+subdirs=(project-repo business-info media plan notes)
+
+if [[ -e "$client_dir" ]]; then
+  echo "Client already exists: $client_dir" >&2
+  exit 1
+fi
+
+if [[ "$dry_run" -eq 1 ]]; then
+  {
+    echo "[dry-run] Would create: $client_dir"
+    for sub in "${subdirs[@]}"; do
+      echo "[dry-run] Would create: $client_dir/$sub"
+    done
+    echo "[dry-run] Would write: $client_dir/README.md"
+  } >&2
+  exit 0
+fi
+
+mkdir -p "$client_dir"
+for sub in "${subdirs[@]}"; do
+  mkdir -p "$client_dir/$sub"
+done
+
+cat <<EOF > "$client_dir/README.md"
+# $name
+
+Workspace: $client_dir
+
+Folders:
+- project-repo: code for the website/app
+- business-info: requirements, contracts, pricing, ops docs
+- media: images/video/audio assets
+- plan: roadmap, milestones, and delivery plan
+- notes: meeting notes and scratch
+
+Next:
+1) Build in project-repo (init git, add remote, etc.).
+2) Store business requirements and decision docs in business-info.
+3) Keep shared assets in media.
+4) Track roadmap and timelines in plan.
+5) Jot research and meeting notes in notes.
+EOF
+
+printf 'Created client workspace at %s\n' "$client_dir"
+printf 'Subfolders: %s\n' "${subdirs[*]}"

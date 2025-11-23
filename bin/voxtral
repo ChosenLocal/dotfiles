@@ -1,0 +1,134 @@
+#!/usr/bin/env bash
+# Voxtral Audio Processing Helper
+# Manages the vLLM server and provides convenient audio transcription interface
+
+VOXTRAL_PORT=8001
+VOXTRAL_MODEL="mistralai/Voxtral-Mini-3B-2507"
+VOXTRAL_API="http://localhost:${VOXTRAL_PORT}"
+
+# Check if server is running
+is_server_running() {
+    curl -s "${VOXTRAL_API}/health" > /dev/null 2>&1
+    return $?
+}
+
+# Start the vLLM server
+start_server() {
+    if is_server_running; then
+        echo "Voxtral server is already running on port ${VOXTRAL_PORT}"
+        return 0
+    fi
+
+    echo "Starting Voxtral server..."
+    nohup vllm serve "${VOXTRAL_MODEL}" \
+        --tokenizer-mode mistral \
+        --config-format mistral \
+        --load-format mistral \
+        --port "${VOXTRAL_PORT}" \
+        > /tmp/voxtral-server.log 2>&1 &
+
+    echo "Waiting for server to start..."
+    for i in {1..30}; do
+        if is_server_running; then
+            echo "Voxtral server started successfully!"
+            return 0
+        fi
+        sleep 2
+    done
+
+    echo "Error: Server failed to start. Check /tmp/voxtral-server.log for details."
+    return 1
+}
+
+# Stop the vLLM server
+stop_server() {
+    if ! is_server_running; then
+        echo "Voxtral server is not running"
+        return 0
+    fi
+
+    echo "Stopping Voxtral server..."
+    pkill -f "vllm serve.*Voxtral"
+    echo "Voxtral server stopped"
+}
+
+# Check server status
+status() {
+    if is_server_running; then
+        echo "Voxtral server is running on ${VOXTRAL_API}"
+        echo "API endpoints:"
+        echo "  - Transcription: ${VOXTRAL_API}/v1/audio/transcriptions"
+        echo "  - Translation: ${VOXTRAL_API}/v1/audio/translations"
+        echo "  - Chat: ${VOXTRAL_API}/v1/chat/completions"
+    else
+        echo "Voxtral server is not running"
+        echo "Start it with: voxtral start"
+    fi
+}
+
+# Transcribe an audio file
+transcribe() {
+    local audio_file="$1"
+
+    if [[ -z "$audio_file" ]]; then
+        echo "Usage: voxtral transcribe <audio_file>"
+        return 1
+    fi
+
+    if [[ ! -f "$audio_file" ]]; then
+        echo "Error: File not found: $audio_file"
+        return 1
+    fi
+
+    if ! is_server_running; then
+        echo "Server not running. Starting it now..."
+        start_server || return 1
+    fi
+
+    echo "Transcribing: $audio_file"
+    curl -s "${VOXTRAL_API}/v1/audio/transcriptions" \
+        -F "file=@${audio_file}" \
+        -F "model=${VOXTRAL_MODEL}" | jq -r '.text'
+}
+
+# Main command dispatcher
+case "$1" in
+    start)
+        start_server
+        ;;
+    stop)
+        stop_server
+        ;;
+    restart)
+        stop_server
+        sleep 2
+        start_server
+        ;;
+    status)
+        status
+        ;;
+    transcribe)
+        transcribe "$2"
+        ;;
+    logs)
+        tail -f /tmp/voxtral-server.log
+        ;;
+    *)
+        echo "Voxtral Audio Processing Helper"
+        echo ""
+        echo "Usage: voxtral <command> [args]"
+        echo ""
+        echo "Commands:"
+        echo "  start           Start the Voxtral vLLM server"
+        echo "  stop            Stop the Voxtral vLLM server"
+        echo "  restart         Restart the Voxtral vLLM server"
+        echo "  status          Check server status"
+        echo "  transcribe FILE Transcribe an audio file"
+        echo "  logs            View server logs"
+        echo ""
+        echo "Examples:"
+        echo "  voxtral start"
+        echo "  voxtral transcribe recording.wav"
+        echo "  voxtral status"
+        ;;
+esac

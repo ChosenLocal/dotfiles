@@ -1,0 +1,50 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+editor="cursor"
+if [[ "${1-}" == "--editor" && -n "${2-}" ]]; then
+  editor="$2"
+  shift 2
+fi
+
+case "$editor" in
+  code|vscode) editor_cmd=("code") ;;
+  cursor|"") editor_cmd=("cursor") ;;
+  *) editor_cmd=("$editor") ;;
+esac
+
+roots=(
+  "$HOME/Desktop/main/ChosenLocal/clients"
+  "$HOME/Desktop/main/ChosenLocal/mySoftware"
+  "$HOME/chosen-local"
+  "$HOME/clients"
+  "$HOME/infra"
+  "$HOME/scratch"
+  "$HOME/Desktop/main"
+)
+
+repos=()
+for root in "${roots[@]}"; do
+  [[ -d "$root" ]] || continue
+  while IFS= read -r gitdir; do
+    repo="${gitdir%/.git}"
+    repos+=("$repo")
+  done < <(command fd -H -t d -d 3 ".git" "$root" 2>/dev/null || true)
+done
+
+if [[ ${#repos[@]} -eq 0 ]]; then
+  echo "No repos found in: ${roots[*]}" >&2
+  exit 1
+fi
+
+selection=$(printf '%s\n' "${repos[@]}" | sort -u | fzf --prompt="codeproj > " --height=60% --border) || exit 1
+selection=${selection/#\~/$HOME}
+
+if ! command -v "${editor_cmd[0]}" >/dev/null 2>&1; then
+  echo "Editor not found: ${editor_cmd[0]}" >&2
+  exit 1
+fi
+
+"${editor_cmd[@]}" "$selection" >/dev/null 2>&1 &
+disown
+echo "Opened ${selection} with ${editor_cmd[0]}"

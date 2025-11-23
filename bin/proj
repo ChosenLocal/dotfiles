@@ -1,0 +1,51 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+KITTY_SOCKET="${KITTY_LISTEN_ON:-unix:/tmp/kitty}"
+LAYOUT_DIR="$HOME/dotfiles/zellij/layouts"
+
+roots=(
+  "$HOME/Desktop/main/ChosenLocal/clients"
+  "$HOME/Desktop/main/ChosenLocal/mySoftware"
+  "$HOME/chosen-local"
+  "$HOME/clients"
+  "$HOME/infra"
+  "$HOME/scratch"
+  "$HOME/Desktop/main"
+)
+
+repos=()
+for root in "${roots[@]}"; do
+  [[ -d "$root" ]] || continue
+  while IFS= read -r gitdir; do
+    repo="${gitdir%/.git}"
+    repos+=("$repo")
+  done < <(command fd -H -t d -d 3 ".git" "$root" 2>/dev/null || true)
+done
+
+if [[ ${#repos[@]} -eq 0 ]]; then
+  echo "No repos found in: ${roots[*]}" >&2
+  exit 1
+fi
+
+selection=$(printf '%s\n' "${repos[@]}" | sort -u | fzf --prompt="proj > " --height=60% --border) || exit 1
+selection=${selection/#\~/$HOME}
+
+session_name=$(basename "$selection" | tr ' ' '-' | tr '[:upper:]' '[:lower:]')
+layout="scratch"
+case "$selection" in
+  "$HOME/chosen-local"*) layout="chosen-local" ;;
+  "$HOME/clients"*) layout="clients" ;;
+  "$HOME/infra"*) layout="infra" ;;
+esac
+
+zellij_cmd=(zellij --session "$session_name" --layout "$LAYOUT_DIR/$layout.kdl")
+
+if command kitty @ --to="$KITTY_SOCKET" ls >/dev/null 2>&1; then
+  kitty @ --to="$KITTY_SOCKET" launch --type=tab --cwd "$selection" --tab-title "$session_name" "${zellij_cmd[@]}"
+elif command -v kitty >/dev/null 2>&1; then
+  kitty --detach --directory "$selection" --title "$session_name" "${zellij_cmd[@]}"
+else
+  cd "$selection"
+  exec "${zellij_cmd[@]}"
+fi

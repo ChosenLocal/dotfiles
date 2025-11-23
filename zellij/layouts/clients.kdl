@@ -1,0 +1,59 @@
+// =============================================================================
+// Zellij Layout: clients
+// Context: Client projects (Olimpia's, Raylyn, etc.)
+// =============================================================================
+
+layout {
+    default_tab_template {
+        pane size=1 borderless=true {
+            plugin location="zellij:tab-bar"
+        }
+        children
+        pane size=2 borderless=true {
+            plugin location="zellij:status-bar"
+        }
+    }
+
+    tab name="clients" {
+        pane split_direction="vertical" {
+            // Left: Editor (60% width)
+            pane size="60%" {
+                name "editor"
+                focus true
+            }
+
+            // Right side split into two
+            pane split_direction="horizontal" size="40%" {
+                // Top-right: Dev server / commands
+                pane size="50%" {
+                    name "dev"
+                }
+
+                // Bottom-right: Git UI
+                pane size="50%" {
+                    name "git"
+                    command "lazygit"
+                }
+            }
+        }
+    }
+
+    tab name="run" {
+        pane split_direction="vertical" {
+            // Top: Commands / servers
+            pane size="55%" {
+                name "dev-server"
+            }
+
+            // Bottom: Logs/watchers
+            pane split_direction="horizontal" size="45%" {
+                pane size="50%" {
+                    name "tests"
+                }
+                pane size="50%" {
+                    name "logs"
+                }
+            }
+        }
+    }
+}

@@ -1,0 +1,59 @@
+@import "/home/jack/.config/rofi/colors-catppuccin-mocha.rasi"
+
+configuration {
+    show-icons: false;
+    disable-history: true;
+    font: "Monaco 11";
+}
+
+window {
+    location: north;
+    anchor: north;
+    width: 720;
+    border: 2px;
+    border-color: @borderc;
+    background-color: @bgal;
+    padding: 12px;
+    children: [mainbox];
+}
+
+mainbox {
+    orientation: vertical;
+    spacing: 8px;
+}
+
+inputbar {
+    children: [prompt, entry];
+    padding: 8px 10px;
+    border-radius: @rad;
+    background-color: @bg;
+    border: 1;
+    border-color: @borderc;
+}
+
+prompt {
+    text: " ";
+    expand: false;
+    color: @accent2;
+}
+
+entry {
+    placeholder: "Search clipboard…";
+}
+
+listview {
+    columns: 1;
+    lines: 12;
+    spacing: 6px;
+}
+
+element {
+    padding: 8px 10px;
+    border-radius: @rad;
+}
+
+element selected {
+    background-color: @accent2;
+    border: 1;
+    border-color: @accent2;
+}

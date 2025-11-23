@@ -1,0 +1,144 @@
+# =============================================================================
+# Git Configuration
+# =============================================================================
+
+[core]
+    editor = nvim
+    pager = delta
+    autocrlf = input
+    whitespace = trailing-space,space-before-tab
+
+[user]
+    # Configure these in ~/.gitconfig.local or globally
+    # name = Your Name
+    # email = your.email@example.com
+
+[init]
+    defaultBranch = main
+
+[pull]
+    rebase = true
+    ff = only
+
+[push]
+    default = current
+    autoSetupRemote = true
+
+[fetch]
+    prune = true
+    pruneTags = true
+
+[rebase]
+    autoStash = true
+    updateRefs = true
+
+[merge]
+    conflictstyle = zdiff3
+
+[rerere]
+    enabled = true
+    autoUpdate = true
+
+# =============================================================================
+# Delta Configuration (syntax highlighting diff viewer)
+# =============================================================================
+
+[delta]
+    navigate = true
+    light = false
+    line-numbers = true
+    side-by-side = false
+    syntax-theme = Catppuccin-mocha
+    features = line-numbers decorations
+
+[delta "decorations"]
+    commit-decoration-style = bold yellow box ul
+    file-style = bold yellow ul
+    file-decoration-style = none
+    hunk-header-decoration-style = cyan box ul
+    whitespace-error-style = reverse red
+
+[delta "line-numbers"]
+    line-numbers-left-style = cyan
+    line-numbers-right-style = cyan
+    line-numbers-minus-style = 124
+    line-numbers-plus-style = 28
+
+[interactive]
+    diffFilter = delta --color-only
+
+[diff]
+    colorMoved = default
+
+# =============================================================================
+# Aliases
+# =============================================================================
+
+[alias]
+    # Status
+    st = status -sb
+    s = status
+
+    # Commit
+    c = commit
+    cm = commit -m
+    ca = commit --amend
+    can = commit --amend --no-edit
+
+    # Branch
+    br = branch
+    brd = branch -d
+    brD = branch -D
+
+    # Checkout
+    co = checkout
+    cob = checkout -b
+
+    # Log
+    l = log --oneline --graph --decorate
+    lg = log --graph --pretty=format:'%Cred%h%Creset -%C(yellow)%d%Creset %s %Cgreen(%cr) %C(bold blue)<%an>%Creset' --abbrev-commit
+    last = log -1 HEAD
+    changelog = log --pretty=format:'- %s' --reverse
+
+    # Diff
+    d = diff
+    ds = diff --staged
+    dc = diff --cached
+
+    # Remote
+    pu = push
+    puf = push --force-with-lease
+    pl = pull
+    f = fetch
+    fa = fetch --all
+
+    # Stash
+    st = stash
+    stp = stash pop
+    stl = stash list
+    sts = stash show -p
+
+    # Reset
+    unstage = reset HEAD --
+    undo = reset --soft HEAD~1
+    uncommit = reset --soft HEAD~1
+
+    # Clean
+    cleanup = !git branch --merged | grep -v '\\*\\|main\\|master\\|develop' | xargs -n 1 git branch -d
+
+    # Show
+    contributors = shortlog -sn
+
+# =============================================================================
+# GitHub CLI Integration
+# =============================================================================
+
+[credential]
+    helper = store
+
+# =============================================================================
+# Include Local/Private Config
+# =============================================================================
+
+[include]
+    path = ~/.gitconfig.local

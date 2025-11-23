@@ -1,0 +1,10 @@
+* {
+    bg: #11141a;
+    surface: #161a22;
+    text: #e5e7eb;
+    text_dim: #b5bcc9;
+    accent: #9597d7;
+    border: #272c36;
+    radius: 12;
+    font: "Monaco 12";
+}
