@@ -1,0 +1,78 @@
+#!/usr/bin/env bash
+# Pre-mount validation script for rclone Google Drive
+# Ensures network connectivity and rclone readiness before attempting mount
+
+set -euo pipefail
+
+RCLONE_CONFIG="${RCLONE_CONFIG:-$HOME/.config/rclone/rclone.conf}"
+MOUNT_POINT="$HOME/GoogleDrive"
+REMOTE_NAME="gdrive"
+MAX_RETRIES=5
+RETRY_DELAY=3
+
+log() {
+    echo "[$(date +'%Y-%m-%d %H:%M:%S')] $*" >&2
+}
+
+# Check if rclone config exists
+if [[ ! -f "$RCLONE_CONFIG" ]]; then
+    log "ERROR: rclone config not found at $RCLONE_CONFIG"
+    exit 1
+fi
+
+# Check if mount point exists, create if needed
+if [[ ! -d "$MOUNT_POINT" ]]; then
+    log "Creating mount point: $MOUNT_POINT"
+    mkdir -p "$MOUNT_POINT"
+fi
+
+# Check if mount point is already mounted
+if mountpoint -q "$MOUNT_POINT" 2>/dev/null; then
+    log "WARNING: $MOUNT_POINT is already mounted"
+    exit 0
+fi
+
+# Wait for network connectivity with retries
+log "Checking network connectivity..."
+for i in $(seq 1 $MAX_RETRIES); do
+    if ping -c 1 -W 2 8.8.8.8 >/dev/null 2>&1; then
+        log "Network connectivity confirmed (attempt $i/$MAX_RETRIES)"
+        break
+    fi
+
+    if [[ $i -eq $MAX_RETRIES ]]; then
+        log "ERROR: No network connectivity after $MAX_RETRIES attempts"
+        exit 1
+    fi
+
+    log "Network not ready, waiting ${RETRY_DELAY}s... (attempt $i/$MAX_RETRIES)"
+    sleep $RETRY_DELAY
+done
+
+# Check Google API connectivity
+log "Checking Google API connectivity..."
+for i in $(seq 1 $MAX_RETRIES); do
+    if curl -s --max-time 5 https://www.googleapis.com >/dev/null 2>&1; then
+        log "Google API connectivity confirmed (attempt $i/$MAX_RETRIES)"
+        break
+    fi
+
+    if [[ $i -eq $MAX_RETRIES ]]; then
+        log "ERROR: Cannot reach Google APIs after $MAX_RETRIES attempts"
+        exit 1
+    fi
+
+    log "Google APIs not reachable, waiting ${RETRY_DELAY}s... (attempt $i/$MAX_RETRIES)"
+    sleep $RETRY_DELAY
+done
+
+# Verify rclone can list the remote (validates config and OAuth token)
+log "Validating rclone configuration and credentials..."
+if ! /usr/bin/rclone lsd "${REMOTE_NAME}:" --config "$RCLONE_CONFIG" --max-depth 1 >/dev/null 2>&1; then
+    log "ERROR: rclone cannot access ${REMOTE_NAME}: (config or OAuth token issue)"
+    log "Try running: rclone config reconnect ${REMOTE_NAME}:"
+    exit 1
+fi
+
+log "All pre-mount checks passed successfully"
+exit 0

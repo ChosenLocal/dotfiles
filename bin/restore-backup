@@ -1,0 +1,345 @@
+#!/usr/bin/env bash
+# restore-backup - Interactive backup restore helper
+# Part of Jack's backup system
+
+set -euo pipefail
+
+# Colors for output
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+NC='\033[0m' # No Color
+
+# Backup locations
+LOCAL_BACKUP="/home/backup/hourly"
+CLOUD_REMOTE="gdrive:backups/arch-$(hostname)"
+
+# Function to print colored output
+print_color() {
+    local color=$1
+    shift
+    echo -e "${color}$*${NC}"
+}
+
+# Function to show menu
+show_menu() {
+    print_color "$BLUE" "=========================================="
+    print_color "$BLUE" "  Backup Restore Helper"
+    print_color "$BLUE" "=========================================="
+    echo ""
+    echo "1. List available local backups"
+    echo "2. List available cloud backups"
+    echo "3. Restore from local backup"
+    echo "4. Restore from cloud backup"
+    echo "5. Restore specific directory/file"
+    echo "6. Compare current system with backup"
+    echo "7. View system state snapshots"
+    echo "8. Restore packages from snapshot"
+    echo "9. Exit"
+    echo ""
+}
+
+# Function to list local backups
+list_local_backups() {
+    print_color "$GREEN" "\nLocal Backups:"
+    print_color "$GREEN" "======================================"
+
+    if [ ! -d "$LOCAL_BACKUP" ]; then
+        print_color "$RED" "No local backup directory found!"
+        return
+    fi
+
+    local backups=$(find "$LOCAL_BACKUP" -maxdepth 1 -type d -name "backup_*" -printf '%T+ %p\n' | sort -r)
+
+    if [ -z "$backups" ]; then
+        print_color "$YELLOW" "No backups found."
+        return
+    fi
+
+    echo "$backups" | while read -r line; do
+        local date=$(echo "$line" | cut -d' ' -f1)
+        local path=$(echo "$line" | cut -d' ' -f2-)
+        local name=$(basename "$path")
+        local size=$(du -sh "$path" 2>/dev/null | cut -f1)
+
+        printf "%-30s  %s  %s\n" "$name" "$date" "$size"
+    done
+}
+
+# Function to list cloud backups
+list_cloud_backups() {
+    print_color "$GREEN" "\nCloud Backups:"
+    print_color "$GREEN" "======================================"
+
+    if ! command -v rclone &>/dev/null; then
+        print_color "$RED" "rclone not installed!"
+        return
+    fi
+
+    if ! rclone lsd "$CLOUD_REMOTE" &>/dev/null; then
+        print_color "$RED" "Cannot access cloud remote: $CLOUD_REMOTE"
+        return
+    fi
+
+    rclone lsd "$CLOUD_REMOTE" --max-depth 1
+}
+
+# Function to restore from local backup
+restore_from_local() {
+    list_local_backups
+
+    echo ""
+    read -p "Enter backup name to restore from (or 'latest'): " backup_name
+
+    if [ "$backup_name" = "latest" ]; then
+        local backup_path="${LOCAL_BACKUP}/latest"
+    else
+        local backup_path="${LOCAL_BACKUP}/${backup_name}"
+    fi
+
+    if [ ! -d "$backup_path" ]; then
+        print_color "$RED" "Backup not found: $backup_path"
+        return
+    fi
+
+    print_color "$YELLOW" "\nAvailable directories in backup:"
+    ls -1 "$backup_path"
+
+    echo ""
+    read -p "Enter directory to restore (or 'all' for everything): " dir_name
+
+    local dest="/home/jack/"
+
+    print_color "$YELLOW" "\nThis will restore to: $dest"
+    read -p "Continue? (yes/no): " confirm
+
+    if [ "$confirm" != "yes" ]; then
+        print_color "$YELLOW" "Restore cancelled."
+        return
+    fi
+
+    if [ "$dir_name" = "all" ]; then
+        print_color "$GREEN" "Restoring all directories..."
+        rsync -avh --progress "$backup_path/" "$dest"
+    else
+        if [ ! -e "${backup_path}/${dir_name}" ]; then
+            print_color "$RED" "Directory not found in backup: $dir_name"
+            return
+        fi
+
+        print_color "$GREEN" "Restoring: $dir_name"
+        rsync -avh --progress "${backup_path}/${dir_name}" "$dest"
+    fi
+
+    print_color "$GREEN" "\nRestore complete!"
+}
+
+# Function to restore from cloud
+restore_from_cloud() {
+    list_cloud_backups
+
+    echo ""
+    read -p "Enter directory name to restore: " dir_name
+
+    if [ -z "$dir_name" ]; then
+        print_color "$RED" "No directory specified."
+        return
+    fi
+
+    local cloud_path="${CLOUD_REMOTE}/${dir_name}"
+    local dest="/home/jack/${dir_name}"
+
+    print_color "$YELLOW" "\nThis will restore from: $cloud_path"
+    print_color "$YELLOW" "To: $dest"
+    read -p "Continue? (yes/no): " confirm
+
+    if [ "$confirm" != "yes" ]; then
+        print_color "$YELLOW" "Restore cancelled."
+        return
+    fi
+
+    print_color "$GREEN" "Downloading from cloud..."
+    rclone sync --progress "$cloud_path" "$dest"
+
+    print_color "$GREEN" "\nRestore complete!"
+}
+
+# Function to restore specific file/directory
+restore_specific() {
+    echo ""
+    read -p "Enter source path (relative to backup root): " src_path
+    read -p "Enter destination path: " dest_path
+
+    if [ ! -e "${LOCAL_BACKUP}/latest/${src_path}" ]; then
+        print_color "$RED" "Source not found in latest backup: $src_path"
+        return
+    fi
+
+    print_color "$YELLOW" "\nRestoring:"
+    print_color "$YELLOW" "  From: ${LOCAL_BACKUP}/latest/${src_path}"
+    print_color "$YELLOW" "  To: $dest_path"
+    read -p "Continue? (yes/no): " confirm
+
+    if [ "$confirm" != "yes" ]; then
+        print_color "$YELLOW" "Restore cancelled."
+        return
+    fi
+
+    rsync -avh --progress "${LOCAL_BACKUP}/latest/${src_path}" "$dest_path"
+
+    print_color "$GREEN" "\nRestore complete!"
+}
+
+# Function to compare with backup
+compare_with_backup() {
+    echo ""
+    read -p "Enter directory to compare (e.g., dotfiles): " dir_name
+
+    local backup_path="${LOCAL_BACKUP}/latest/${dir_name}"
+    local current_path="/home/jack/${dir_name}"
+
+    if [ ! -d "$backup_path" ]; then
+        print_color "$RED" "Backup directory not found: $backup_path"
+        return
+    fi
+
+    if [ ! -d "$current_path" ]; then
+        print_color "$RED" "Current directory not found: $current_path"
+        return
+    fi
+
+    print_color "$GREEN" "\nComparing: $dir_name"
+    print_color "$GREEN" "======================================"
+
+    diff -rq "$backup_path" "$current_path" || true
+}
+
+# Function to view system snapshots
+view_snapshots() {
+    local snapshot_dir="/home/backup/system-state"
+
+    print_color "$GREEN" "\nSystem State Snapshots:"
+    print_color "$GREEN" "======================================"
+
+    if [ ! -d "$snapshot_dir" ]; then
+        print_color "$RED" "No snapshot directory found!"
+        return
+    fi
+
+    local snapshots=$(find "$snapshot_dir" -maxdepth 1 -type d -name "snapshot_*" -printf '%T+ %p\n' | sort -r)
+
+    if [ -z "$snapshots" ]; then
+        print_color "$YELLOW" "No snapshots found."
+        return
+    fi
+
+    echo "$snapshots" | while read -r line; do
+        local date=$(echo "$line" | cut -d' ' -f1)
+        local path=$(echo "$line" | cut -d' ' -f2-)
+        local name=$(basename "$path")
+
+        printf "%-30s  %s\n" "$name" "$date"
+    done
+
+    echo ""
+    read -p "Enter snapshot name to view details (or press Enter to skip): " snapshot_name
+
+    if [ -n "$snapshot_name" ]; then
+        local snapshot_path="${snapshot_dir}/${snapshot_name}"
+
+        if [ ! -d "$snapshot_path" ]; then
+            print_color "$RED" "Snapshot not found."
+            return
+        fi
+
+        print_color "$BLUE" "\nSnapshot Contents:"
+        ls -lh "$snapshot_path"
+
+        if [ -f "${snapshot_path}/README.txt" ]; then
+            echo ""
+            print_color "$BLUE" "Snapshot README:"
+            cat "${snapshot_path}/README.txt"
+        fi
+    fi
+}
+
+# Function to restore packages from snapshot
+restore_packages() {
+    local snapshot_dir="/home/backup/system-state"
+
+    print_color "$GREEN" "\nAvailable Snapshots:"
+    find "$snapshot_dir" -maxdepth 1 -type d -name "snapshot_*" -printf '%T+ %f\n' | sort -r | head -10
+
+    echo ""
+    read -p "Enter snapshot name (or 'latest'): " snapshot_name
+
+    if [ "$snapshot_name" = "latest" ]; then
+        local snapshot_path="${snapshot_dir}/latest"
+    else
+        local snapshot_path="${snapshot_dir}/${snapshot_name}"
+    fi
+
+    if [ ! -d "$snapshot_path" ]; then
+        print_color "$RED" "Snapshot not found."
+        return
+    fi
+
+    local pkg_file="${snapshot_path}/packages-explicit.txt"
+
+    if [ ! -f "$pkg_file" ]; then
+        print_color "$RED" "Package list not found in snapshot."
+        return
+    fi
+
+    print_color "$YELLOW" "\nPackages to install:"
+    head -20 "$pkg_file"
+    echo "..."
+    echo ""
+    print_color "$YELLOW" "Total packages: $(wc -l < "$pkg_file")"
+
+    echo ""
+    read -p "Install these packages? (yes/no): " confirm
+
+    if [ "$confirm" != "yes" ]; then
+        print_color "$YELLOW" "Installation cancelled."
+        return
+    fi
+
+    print_color "$GREEN" "Installing packages..."
+    paru -S --needed - < "$pkg_file"
+
+    print_color "$GREEN" "\nPackage restoration complete!"
+}
+
+# Main loop
+main() {
+    while true; do
+        show_menu
+        read -p "Select an option (1-9): " choice
+
+        case $choice in
+            1) list_local_backups ;;
+            2) list_cloud_backups ;;
+            3) restore_from_local ;;
+            4) restore_from_cloud ;;
+            5) restore_specific ;;
+            6) compare_with_backup ;;
+            7) view_snapshots ;;
+            8) restore_packages ;;
+            9)
+                print_color "$GREEN" "Exiting..."
+                exit 0
+                ;;
+            *)
+                print_color "$RED" "Invalid option. Please try again."
+                ;;
+        esac
+
+        echo ""
+        read -p "Press Enter to continue..."
+    done
+}
+
+# Run main function
+main "$@"

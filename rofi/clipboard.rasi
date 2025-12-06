@@ -11,8 +11,8 @@ window {
     anchor: north;
     width: 720;
     border: 2px;
-    border-color: @borderc;
-    background-color: @bgal;
+    border-color: @border;
+    background-color: @bg;
     padding: 12px;
     children: [mainbox];
 }
@@ -25,16 +25,16 @@ mainbox {
 inputbar {
     children: [prompt, entry];
     padding: 8px 10px;
-    border-radius: @rad;
-    background-color: @bg;
+    border-radius: @radius;
+    background-color: @surface;
     border: 1;
-    border-color: @borderc;
+    border-color: @border;
 }
 
 prompt {
-    text: " ";
+    text: " ";
     expand: false;
-    color: @accent2;
+    color: @accent;
 }
 
 entry {
@@ -49,11 +49,11 @@ listview {
 
 element {
     padding: 8px 10px;
-    border-radius: @rad;
+    border-radius: @radius;
 }
 
 element selected {
-    background-color: @accent2;
+    background-color: @accent;
     border: 1;
-    border-color: @accent2;
+    border-color: @accent;
 }

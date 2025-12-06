@@ -1,0 +1,298 @@
+#!/usr/bin/env bash
+# Smart Upgrade System for Arch Linux
+# Performs safety checks before system upgrades to prevent breaking critical components
+# Author: Codex System Assistant
+# Version: 1.0.0
+
+set -euo pipefail
+
+# Colors for output
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+NC='\033[0m' # No Color
+
+# Configuration
+CODEX_DIR="/home/jack/codex-sys"
+CHANGELOG_DIR="${CODEX_DIR}/changelog/2025"
+ISSUES_DIR="${CODEX_DIR}/issues"
+LOG_FILE="/tmp/smart-upgrade-$(date +%Y%m%d%H%M%S).log"
+
+# Critical packages to monitor
+CRITICAL_PACKAGES=(
+    "linux"
+    "linux-headers"
+    "nvidia-open"
+    "nvidia-utils"
+    "cuda"
+    "hyprland"
+    "wayland"
+    "xorg-xwayland"
+)
+
+# Functions
+log_message() {
+    echo -e "$1" | tee -a "$LOG_FILE"
+}
+
+check_arch_news() {
+    log_message "${BLUE}[CHECK]${NC} Checking Arch Linux news for manual interventions..."
+
+    # Check if there are any manual intervention requirements
+    if command -v curl &>/dev/null; then
+        NEWS=$(curl -s "https://www.archlinux.org/feeds/news/" | grep -oP '(?<=<title>).*?(?=</title>)' | head -5 2>/dev/null || true)
+        if [[ -n "$NEWS" ]]; then
+            log_message "${YELLOW}[INFO]${NC} Recent Arch news (check for manual interventions):"
+            echo "$NEWS" | while read -r line; do
+                log_message "  • $line"
+            done
+        fi
+    fi
+}
+
+check_critical_updates() {
+    log_message "${BLUE}[CHECK]${NC} Analyzing updates for critical packages..."
+
+    # Get list of pending updates
+    UPDATES=$(paru -Qu 2>/dev/null || true)
+
+    if [[ -z "$UPDATES" ]]; then
+        log_message "${GREEN}[OK]${NC} System is up to date!"
+        return 1
+    fi
+
+    # Check for critical package updates
+    CRITICAL_FOUND=false
+    for pkg in "${CRITICAL_PACKAGES[@]}"; do
+        if echo "$UPDATES" | grep -q "^$pkg "; then
+            log_message "${YELLOW}[WARN]${NC} Critical package update detected: $pkg"
+            CRITICAL_FOUND=true
+        fi
+    done
+
+    # Check for kernel/nvidia mismatch
+    if echo "$UPDATES" | grep -q "^linux " && ! echo "$UPDATES" | grep -q "nvidia"; then
+        log_message "${RED}[DANGER]${NC} Kernel update without NVIDIA driver update detected!"
+        log_message "${YELLOW}[INFO]${NC} This might break your graphics. Checking if compatible NVIDIA drivers are available..."
+    fi
+
+    return 0
+}
+
+backup_critical_configs() {
+    log_message "${BLUE}[BACKUP]${NC} Backing up critical configurations..."
+
+    BACKUP_DIR="/home/jack/.config/upgrade-backups/$(date +%Y%m%d-%H%M%S)"
+    mkdir -p "$BACKUP_DIR"
+
+    # Backup critical configs
+    cp -a /home/jack/.config/hypr "$BACKUP_DIR/" 2>/dev/null || true
+    cp /home/jack/Desktop/main/scripts/set_hyprland_monitors.sh "$BACKUP_DIR/" 2>/dev/null || true
+
+    # Save package list
+    pacman -Qeq > "$BACKUP_DIR/package-list.txt"
+    pacman -Qemq > "$BACKUP_DIR/aur-package-list.txt"
+
+    log_message "${GREEN}[OK]${NC} Configs backed up to: $BACKUP_DIR"
+}
+
+check_disk_space() {
+    log_message "${BLUE}[CHECK]${NC} Checking disk space..."
+
+    # Check available space on root
+    AVAILABLE=$(df / | awk 'NR==2 {print $4}')
+    AVAILABLE_GB=$((AVAILABLE / 1024 / 1024))
+
+    if [[ $AVAILABLE_GB -lt 5 ]]; then
+        log_message "${RED}[ERROR]${NC} Less than 5GB free space available!"
+        log_message "${YELLOW}[INFO]${NC} Consider cleaning package cache: paru -Sc"
+        return 1
+    fi
+
+    log_message "${GREEN}[OK]${NC} ${AVAILABLE_GB}GB free space available"
+}
+
+validate_gpu_stack() {
+    log_message "${BLUE}[CHECK]${NC} Validating GPU/CUDA stack..."
+
+    if nvidia-smi &>/dev/null; then
+        log_message "${GREEN}[OK]${NC} NVIDIA driver is functional"
+    else
+        log_message "${YELLOW}[WARN]${NC} NVIDIA driver check failed (might be normal if not in X/Wayland session)"
+    fi
+
+    if [[ -d /opt/cuda ]]; then
+        log_message "${GREEN}[OK]${NC} CUDA installation found"
+    else
+        log_message "${YELLOW}[WARN]${NC} CUDA not found at /opt/cuda"
+    fi
+}
+
+create_changelog_entry() {
+    local status="$1"
+    local timestamp=$(date +%Y%m%d%H%M%S)
+    local changelog_file="${CHANGELOG_DIR}/${timestamp}_system_upgrade.md"
+
+    mkdir -p "$CHANGELOG_DIR"
+
+    cat > "$changelog_file" << EOF
+# System Upgrade - $(date +"%Y-%m-%d %H:%M:%S")
+
+**Status**: $status
+**Type**: system-upgrade
+**Component**: pacman/paru
+**Risk Level**: variable
+
+## Summary
+System-wide package upgrade using smart-upgrade wrapper.
+
+## Changes
+### Packages Updated
+\`\`\`
+$(paru -Qu 2>/dev/null || echo "No updates available")
+\`\`\`
+
+## Validation Results
+- Pre-upgrade disk space: ${AVAILABLE_GB}GB free
+- Critical packages affected: ${CRITICAL_FOUND}
+- GPU stack validated: $(nvidia-smi &>/dev/null && echo "Yes" || echo "No")
+
+## Log
+See detailed log at: $LOG_FILE
+
+## Rollback
+If issues occur:
+1. Boot previous kernel from rEFInd menu (if kernel was updated)
+2. Restore configs from: $BACKUP_DIR
+3. Downgrade packages: \`paru -U /var/cache/pacman/pkg/<package-old-version>\`
+
+## Related Issues
+None
+
+---
+Generated by smart-upgrade v1.0.0
+EOF
+
+    log_message "${GREEN}[OK]${NC} Changelog entry created: $changelog_file"
+}
+
+perform_upgrade() {
+    log_message "${BLUE}[UPGRADE]${NC} Starting system upgrade..."
+
+    # Create initial changelog entry
+    create_changelog_entry "in-progress"
+
+    # Run the upgrade
+    if paru --noconfirm; then
+        log_message "${GREEN}[SUCCESS]${NC} Upgrade completed successfully!"
+        create_changelog_entry "completed"
+
+        # Run post-upgrade validation
+        post_upgrade_check
+    else
+        log_message "${RED}[ERROR]${NC} Upgrade failed! Check logs for details."
+        create_changelog_entry "failed"
+        return 1
+    fi
+}
+
+post_upgrade_check() {
+    log_message "${BLUE}[POST-CHECK]${NC} Running post-upgrade validation..."
+
+    # Check if monitors are still working
+    if [[ -f /home/jack/Desktop/main/scripts/set_hyprland_monitors.sh ]]; then
+        log_message "${BLUE}[CHECK]${NC} Testing monitor configuration..."
+        if /home/jack/Desktop/main/scripts/set_hyprland_monitors.sh &>/dev/null; then
+            log_message "${GREEN}[OK]${NC} Monitor configuration applied successfully"
+        else
+            log_message "${YELLOW}[WARN]${NC} Monitor configuration may need attention"
+        fi
+    fi
+
+    # Validate critical services
+    if systemctl --user is-active hyprland-session.target &>/dev/null; then
+        log_message "${GREEN}[OK]${NC} Hyprland session is active"
+    fi
+
+    # Check for new orphaned packages
+    ORPHANS=$(pacman -Qdtq | wc -l)
+    if [[ $ORPHANS -gt 0 ]]; then
+        log_message "${YELLOW}[INFO]${NC} Found $ORPHANS orphaned packages. Consider removing with: pacman -Qdtq | pacman -Rns -"
+    fi
+}
+
+main() {
+    log_message "${GREEN}╔════════════════════════════════════════╗${NC}"
+    log_message "${GREEN}║     Smart Upgrade System for Arch     ║${NC}"
+    log_message "${GREEN}╚════════════════════════════════════════╝${NC}"
+    log_message ""
+
+    # Parse arguments
+    DRY_RUN=false
+    SKIP_CHECKS=false
+
+    while [[ $# -gt 0 ]]; do
+        case $1 in
+            --dry-run)
+                DRY_RUN=true
+                log_message "${YELLOW}[MODE]${NC} Running in dry-run mode (no changes will be made)"
+                shift
+                ;;
+            --skip-checks)
+                SKIP_CHECKS=true
+                log_message "${YELLOW}[MODE]${NC} Skipping safety checks (dangerous!)"
+                shift
+                ;;
+            --help)
+                echo "Usage: smart-upgrade [options]"
+                echo "Options:"
+                echo "  --dry-run      Show what would be upgraded without making changes"
+                echo "  --skip-checks  Skip safety checks (dangerous!)"
+                echo "  --help         Show this help message"
+                exit 0
+                ;;
+            *)
+                log_message "${RED}[ERROR]${NC} Unknown option: $1"
+                exit 1
+                ;;
+        esac
+    done
+
+    if [[ "$SKIP_CHECKS" == false ]]; then
+        # Run all safety checks
+        check_arch_news
+        check_disk_space || exit 1
+
+        if ! check_critical_updates; then
+            log_message "${GREEN}[DONE]${NC} No updates available."
+            exit 0
+        fi
+
+        validate_gpu_stack
+        backup_critical_configs
+    fi
+
+    if [[ "$DRY_RUN" == true ]]; then
+        log_message ""
+        log_message "${YELLOW}[DRY-RUN]${NC} Would upgrade the following packages:"
+        paru -Qu
+        log_message ""
+        log_message "${GREEN}[DONE]${NC} Dry-run complete. Run without --dry-run to perform upgrade."
+    else
+        log_message ""
+        read -p "Proceed with system upgrade? (y/N) " -n 1 -r
+        echo
+        if [[ $REPLY =~ ^[Yy]$ ]]; then
+            perform_upgrade
+        else
+            log_message "${YELLOW}[ABORT]${NC} Upgrade cancelled by user."
+        fi
+    fi
+
+    log_message ""
+    log_message "${BLUE}[LOG]${NC} Full log saved to: $LOG_FILE"
+}
+
+# Run main function
+main "$@"

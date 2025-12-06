@@ -1,0 +1,205 @@
+#!/usr/bin/env bash
+# backup-local - Incremental local backup using rsync
+# Part of Jack's backup system (Tier 2)
+
+set -euo pipefail
+
+# Configuration
+BACKUP_ROOT="/home/backup/hourly"
+SOURCE_HOME="/home/jack"
+TIMESTAMP=$(date +%Y%m%d_%H%M%S)
+BACKUP_NAME="backup_${TIMESTAMP}"
+BACKUP_DEST="${BACKUP_ROOT}/${BACKUP_NAME}"
+LATEST_LINK="${BACKUP_ROOT}/latest"
+LOG_FILE="${BACKUP_ROOT}/backup.log"
+MAX_BACKUPS=168  # Keep 7 days of hourly backups (7 * 24)
+
+# Directories to back up
+BACKUP_DIRS=(
+    "dotfiles"
+    "codex-sys"
+    "ChosenLocal"
+    "Documents"
+    "Desktop/main/scripts"
+    ".config"
+    ".local/bin"
+    ".local/share"
+)
+
+# Exclusion patterns (caches, temp files, build artifacts)
+EXCLUDE_PATTERNS=(
+    # System caches
+    ".cache/"
+    "*.cache"
+    ".thumbnails/"
+
+    # Browser caches and temp files
+    ".config/Chromium/*/Cache/"
+    ".config/Chromium/*/Code Cache/"
+    ".config/Chromium/*/GPUCache/"
+    ".config/Chromium/*/Service Worker/"
+    ".config/Chromium/*/VideoDecodeStats/"
+    ".config/google-chrome/*/Cache/"
+    ".config/google-chrome/*/Code Cache/"
+    ".config/Code/Cache/"
+    ".config/Code/CachedData/"
+    ".config/Code/logs/"
+    ".config/cursor/Cache/"
+    ".config/cursor/CachedData/"
+    ".config/cursor/logs/"
+
+    # Development build artifacts
+    "node_modules/"
+    "__pycache__/"
+    "*.pyc"
+    ".pytest_cache/"
+    "target/"  # Rust
+    "dist/"
+    "build/"
+    ".next/"
+    ".nuxt/"
+    ".venv/"
+    "venv/"
+    ".tox/"
+
+    # IDE and editor temp files
+    ".vscode/extensions/"
+    ".idea/"
+    "*.swp"
+    "*.swo"
+    "*~"
+    ".DS_Store"
+
+    # Large media/download caches
+    ".local/share/Trash/"
+    ".local/share/baloo/"
+
+    # Docker and container data
+    ".local/share/containers/"
+    ".local/share/docker/"
+
+    # Steam and games (if present)
+    ".steam/"
+    ".local/share/Steam/"
+
+    # Temp and log files
+    "*.log"
+    "*.tmp"
+    ".tmp/"
+    "tmp/"
+)
+
+# Build rsync exclude arguments
+EXCLUDE_ARGS=()
+for pattern in "${EXCLUDE_PATTERNS[@]}"; do
+    EXCLUDE_ARGS+=("--exclude=${pattern}")
+done
+
+# Function to send notification
+notify() {
+    local title="$1"
+    local message="$2"
+    local urgency="${3:-normal}"
+
+    if command -v notify-send &>/dev/null; then
+        notify-send -u "$urgency" "$title" "$message"
+    fi
+}
+
+# Function to log with timestamp
+log() {
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*" | tee -a "$LOG_FILE"
+}
+
+# Function to cleanup old backups
+cleanup_old_backups() {
+    log "Cleaning up old backups (keeping last ${MAX_BACKUPS})..."
+
+    local backup_count=$(find "$BACKUP_ROOT" -maxdepth 1 -type d -name "backup_*" | wc -l)
+
+    if [ "$backup_count" -gt "$MAX_BACKUPS" ]; then
+        local to_delete=$((backup_count - MAX_BACKUPS))
+        find "$BACKUP_ROOT" -maxdepth 1 -type d -name "backup_*" -printf '%T+ %p\n' | \
+            sort | head -n "$to_delete" | cut -d' ' -f2- | \
+            while read -r old_backup; do
+                log "Removing old backup: $(basename "$old_backup")"
+                rm -rf "$old_backup"
+            done
+    fi
+}
+
+# Main backup logic
+main() {
+    log "=========================================="
+    log "Starting local backup: ${BACKUP_NAME}"
+    log "=========================================="
+
+    # Create backup destination
+    mkdir -p "$BACKUP_DEST"
+
+    # Determine link-dest for incremental backup
+    LINK_DEST_ARG=""
+    if [ -L "$LATEST_LINK" ] && [ -d "$LATEST_LINK" ]; then
+        LINK_DEST_ARG="--link-dest=${LATEST_LINK}"
+        log "Using incremental backup from: $(basename $(readlink "$LATEST_LINK"))"
+    else
+        log "Creating full backup (no previous backup found)"
+    fi
+
+    # Perform backup for each directory
+    local total_size=0
+    local failed_dirs=()
+
+    for dir in "${BACKUP_DIRS[@]}"; do
+        local src="${SOURCE_HOME}/${dir}"
+
+        if [ ! -e "$src" ]; then
+            log "Warning: Source directory does not exist: $src"
+            continue
+        fi
+
+        log "Backing up: $dir"
+
+        if rsync -aH --info=progress2 \
+            $LINK_DEST_ARG \
+            "${EXCLUDE_ARGS[@]}" \
+            "$src" \
+            "${BACKUP_DEST}/" 2>&1 | tee -a "$LOG_FILE"; then
+
+            local dir_size=$(du -sh "${BACKUP_DEST}/$(basename "$dir")" 2>/dev/null | cut -f1)
+            log "  ✓ Completed: $dir ($dir_size)"
+        else
+            log "  ✗ Failed: $dir"
+            failed_dirs+=("$dir")
+        fi
+    done
+
+    # Update latest symlink
+    ln -sfn "$BACKUP_DEST" "$LATEST_LINK"
+
+    # Calculate total backup size
+    total_size=$(du -sh "$BACKUP_DEST" 2>/dev/null | cut -f1)
+    log "Total backup size: $total_size"
+
+    # Cleanup old backups
+    cleanup_old_backups
+
+    # Calculate disk usage
+    local disk_usage=$(df -h "$BACKUP_ROOT" | awk 'NR==2 {print $5}')
+    log "Backup partition usage: $disk_usage"
+
+    log "=========================================="
+
+    # Send notification
+    if [ ${#failed_dirs[@]} -eq 0 ]; then
+        log "Backup completed successfully!"
+        notify "Backup Complete" "Local backup finished successfully\nSize: $total_size | Disk: $disk_usage" "normal"
+    else
+        log "Backup completed with errors!"
+        log "Failed directories: ${failed_dirs[*]}"
+        notify "Backup Warning" "Backup completed with errors\nFailed: ${failed_dirs[*]}" "critical"
+    fi
+}
+
+# Run main function
+main "$@"

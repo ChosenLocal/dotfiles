@@ -1,0 +1,177 @@
+#!/usr/bin/env bash
+# backup-system-state - Capture system configuration snapshot
+# Part of Jack's backup system (Tier 3)
+
+set -euo pipefail
+
+# Configuration
+SNAPSHOT_DIR="/home/backup/system-state"
+TIMESTAMP=$(date +%Y%m%d_%H%M%S)
+SNAPSHOT_NAME="snapshot_${TIMESTAMP}"
+SNAPSHOT_PATH="${SNAPSHOT_DIR}/${SNAPSHOT_NAME}"
+
+# Function to send notification
+notify() {
+    local title="$1"
+    local message="$2"
+    local urgency="${3:-normal}"
+
+    if command -v notify-send &>/dev/null; then
+        notify-send -u "$urgency" "$title" "$message"
+    fi
+}
+
+# Function to log with timestamp
+log() {
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*"
+}
+
+# Main snapshot logic
+main() {
+    log "=========================================="
+    log "Creating system state snapshot: ${SNAPSHOT_NAME}"
+    log "=========================================="
+
+    # Create snapshot directory
+    mkdir -p "$SNAPSHOT_PATH"
+
+    # Capture package lists
+    log "Capturing package lists..."
+    paru -Qe > "${SNAPSHOT_PATH}/packages-explicit.txt"  # Explicitly installed
+    paru -Qn > "${SNAPSHOT_PATH}/packages-native.txt"    # Official repos
+    paru -Qm > "${SNAPSHOT_PATH}/packages-aur.txt"       # AUR packages
+    paru -Q > "${SNAPSHOT_PATH}/packages-all.txt"        # All installed
+
+    # Capture systemd services
+    log "Capturing systemd services..."
+    systemctl list-units --type=service --all > "${SNAPSHOT_PATH}/systemd-system-services.txt"
+    systemctl --user list-units --type=service --all > "${SNAPSHOT_PATH}/systemd-user-services.txt"
+
+    # Capture enabled services
+    systemctl list-unit-files --state=enabled > "${SNAPSHOT_PATH}/systemd-enabled.txt"
+    systemctl --user list-unit-files --state=enabled > "${SNAPSHOT_PATH}/systemd-user-enabled.txt"
+
+    # Capture systemd timers
+    systemctl list-timers --all > "${SNAPSHOT_PATH}/systemd-timers.txt"
+    systemctl --user list-timers --all > "${SNAPSHOT_PATH}/systemd-user-timers.txt"
+
+    # Capture kernel info
+    log "Capturing kernel and hardware info..."
+    uname -a > "${SNAPSHOT_PATH}/kernel-info.txt"
+    lsmod > "${SNAPSHOT_PATH}/kernel-modules.txt"
+
+    # Capture hardware info
+    lspci > "${SNAPSHOT_PATH}/hardware-pci.txt" 2>/dev/null || true
+    command -v lsusb &>/dev/null && lsusb > "${SNAPSHOT_PATH}/hardware-usb.txt" || true
+    lsblk -f > "${SNAPSHOT_PATH}/hardware-disks.txt" 2>/dev/null || true
+
+    # Capture GPU info (NVIDIA)
+    if command -v nvidia-smi &>/dev/null; then
+        nvidia-smi -L > "${SNAPSHOT_PATH}/gpu-nvidia.txt"
+    fi
+
+    # Capture network configuration
+    log "Capturing network configuration..."
+    ip addr > "${SNAPSHOT_PATH}/network-interfaces.txt" || true
+    ip route > "${SNAPSHOT_PATH}/network-routes.txt" || true
+
+    # Capture Hyprland configuration
+    if [ -f "$HOME/.config/hypr/hyprland.conf" ]; then
+        log "Capturing Hyprland configuration..."
+        cp "$HOME/.config/hypr/hyprland.conf" "${SNAPSHOT_PATH}/hyprland.conf"
+    fi
+
+    # Capture monitor setup
+    if command -v hyprctl &>/dev/null; then
+        hyprctl monitors > "${SNAPSHOT_PATH}/hyprland-monitors.txt" 2>/dev/null || true
+    fi
+
+    # Capture environment variables
+    log "Capturing environment..."
+    env | sort > "${SNAPSHOT_PATH}/environment.txt"
+
+    # Capture shell configuration
+    if [ -f "$HOME/.zshrc" ]; then
+        cp "$HOME/.zshrc" "${SNAPSHOT_PATH}/zshrc" 2>/dev/null || true
+    fi
+
+    # Capture rclone remotes
+    if command -v rclone &>/dev/null; then
+        rclone listremotes > "${SNAPSHOT_PATH}/rclone-remotes.txt" 2>/dev/null || true
+    fi
+
+    # Capture mise/asdf tools (version managers)
+    if command -v mise &>/dev/null; then
+        mise list > "${SNAPSHOT_PATH}/mise-tools.txt" 2>/dev/null || true
+    fi
+
+    # Capture pyenv versions
+    if command -v pyenv &>/dev/null; then
+        pyenv versions > "${SNAPSHOT_PATH}/pyenv-versions.txt" 2>/dev/null || true
+    fi
+
+    # Capture cargo/rust info
+    if command -v cargo &>/dev/null; then
+        cargo --version > "${SNAPSHOT_PATH}/rust-version.txt" 2>/dev/null || true
+    fi
+
+    # Capture node/npm info
+    if command -v node &>/dev/null; then
+        node --version > "${SNAPSHOT_PATH}/node-version.txt" 2>/dev/null || true
+        npm list -g --depth=0 > "${SNAPSHOT_PATH}/npm-global.txt" 2>/dev/null || true
+    fi
+
+    # Create a README for this snapshot
+    cat > "${SNAPSHOT_PATH}/README.txt" <<EOF
+System State Snapshot
+Created: $(date)
+Hostname: $(hostname)
+User: $(whoami)
+Kernel: $(uname -r)
+
+This snapshot contains:
+- Package lists (pacman/AUR)
+- Systemd services and timers
+- Kernel modules and hardware info
+- Network configuration
+- Development tool versions
+- Key configuration files
+
+To restore packages:
+  paru -S --needed - < packages-explicit.txt
+
+To compare with current state:
+  diff packages-explicit.txt <(paru -Qe)
+EOF
+
+    # Create a latest symlink
+    ln -sfn "$SNAPSHOT_PATH" "${SNAPSHOT_DIR}/latest"
+
+    # Cleanup old snapshots (keep last 30)
+    log "Cleaning up old snapshots..."
+    local snapshot_count=$(find "$SNAPSHOT_DIR" -maxdepth 1 -type d -name "snapshot_*" | wc -l)
+
+    if [ "$snapshot_count" -gt 30 ]; then
+        local to_delete=$((snapshot_count - 30))
+        find "$SNAPSHOT_DIR" -maxdepth 1 -type d -name "snapshot_*" -printf '%T+ %p\n' | \
+            sort | head -n "$to_delete" | cut -d' ' -f2- | \
+            while read -r old_snapshot; do
+                log "Removing old snapshot: $(basename "$old_snapshot")"
+                rm -rf "$old_snapshot"
+            done
+    fi
+
+    # Calculate snapshot size
+    local snapshot_size=$(du -sh "$SNAPSHOT_PATH" 2>/dev/null | cut -f1)
+    log "Snapshot size: $snapshot_size"
+
+    log "=========================================="
+    log "System state snapshot complete!"
+    log "Location: $SNAPSHOT_PATH"
+
+    # Send notification
+    notify "System Snapshot Complete" "System state captured successfully\nSize: $snapshot_size" "normal"
+}
+
+# Run main function
+main "$@"

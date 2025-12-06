@@ -45,6 +45,17 @@ export EDITOR="nvim"
 export VISUAL="nvim"
 
 # -----------------------------------------------------------------------------
+# API Keys & Secrets
+# -----------------------------------------------------------------------------
+# Load secrets from external file (not tracked in git)
+# Create ~/.secrets with your API keys:
+#   export ANTHROPIC_API_KEY="your-key-here"
+# Or use 1Password CLI: eval $(op signin) && export ANTHROPIC_API_KEY=$(op read "op://Private/Anthropic API/credential")
+if [ -f ~/.secrets ]; then
+    source ~/.secrets
+fi
+
+# -----------------------------------------------------------------------------
 # Plugin Loading
 # -----------------------------------------------------------------------------
 # zsh-syntax-highlighting (must be loaded last)
@@ -99,6 +110,10 @@ alias c='clear'
 alias q='exit'
 alias reload='source ~/.zshrc'
 
+# System upgrade (smart-upgrade wrapper)
+alias upgrade='smart-upgrade'
+alias upgrade-dry='smart-upgrade --dry-run'
+
 # -----------------------------------------------------------------------------
 # Navigation Tools
 # -----------------------------------------------------------------------------
@@ -146,12 +161,50 @@ j() {
         codex)
             cd ~/codex-sys
             ;;
+        ai)
+            cd /srv/ai
+            ;;
+        aim|ai-models)
+            cd /srv/ai/models
+            ;;
+        aid|ai-datasets)
+            cd /srv/ai/datasets
+            ;;
+        aic|ai-cache)
+            cd /srv/ai/cache
+            ;;
+        aiw|ai-workspaces)
+            cd /srv/ai/workspaces
+            ;;
         *)
             # Fall back to zoxide
             z "$@"
             ;;
     esac
 }
+
+# AI Scratch Drive Shortcuts
+alias ai='cd /srv/ai'
+alias aim='cd /srv/ai/models'
+alias aid='cd /srv/ai/datasets'
+alias aic='cd /srv/ai/cache'
+alias aiw='cd /srv/ai/workspaces'
+
+# -----------------------------------------------------------------------------
+# AI Scratch Drive Configuration
+# -----------------------------------------------------------------------------
+
+# HuggingFace cache on scratch drive
+export HF_HOME="/srv/ai/hf"
+
+# XDG cache redirection to scratch drive
+export XDG_CACHE_HOME="/srv/ai/xdg-cache"
+
+# vLLM cache directory
+export VLLM_CACHE_DIR="/srv/ai/vllm_cache"
+
+# Ollama models (optional - system service uses /var/lib/ollama)
+# export OLLAMA_MODELS="/srv/ai/ollama/models"
 
 # -----------------------------------------------------------------------------
 # Development Tools
@@ -194,6 +247,12 @@ alias chosen='zellij attach -c chosen-local'
 alias clients='zellij attach -c clients'
 alias infra='zellij attach -c infra'
 alias scratch='zellij attach -c scratch'
+
+# -----------------------------------------------------------------------------
+# Kitty Integration
+# -----------------------------------------------------------------------------
+# Rename current Kitty tab
+alias ktab='kitty @ set-tab-title'
 
 # -----------------------------------------------------------------------------
 # AI/LLM Integration
@@ -262,6 +321,12 @@ function yy() {
     fi
     rm -f -- "$tmp"
 }
+
+# -----------------------------------------------------------------------------
+# Smart Upgrade System
+# -----------------------------------------------------------------------------
+alias upgrade='~/dotfiles/bin/smart-upgrade'
+alias upgrade-dry='~/dotfiles/bin/smart-upgrade --dry-run'
 
 # -----------------------------------------------------------------------------
 # Starship Prompt (must be at end)

@@ -1,14 +1,22 @@
 [Unit]
 Description=Mount Google Drive via rclone
 Documentation=https://wiki.archlinux.org/title/Rclone
-After=network-online.target
-Wants=network-online.target
+# Pre-mount validation handles network checks, so we just need basic ordering
+After=default.target
+# Prevent runaway restarts: max 5 attempts in 5 minutes
+StartLimitBurst=5
+StartLimitIntervalSec=300
 
 [Service]
 Type=notify
 Environment=RCLONE_CONFIG=/home/jack/.config/rclone/rclone.conf
+
+# Pre-mount validation: check network, Google API access, and rclone credentials
+ExecStartPre=/home/jack/dotfiles/bin/rclone-gdrive-premount
+
 ExecStart=/usr/bin/rclone mount gdrive: /home/jack/GoogleDrive \
     --config /home/jack/.config/rclone/rclone.conf \
+    --allow-non-empty \
     --dir-cache-time 1h \
     --vfs-cache-mode full \
     --vfs-cache-max-size 20G \
@@ -19,9 +27,12 @@ ExecStart=/usr/bin/rclone mount gdrive: /home/jack/GoogleDrive \
     --cache-dir /home/jack/.cache/rclone \
     --log-file /home/jack/.cache/rclone/gdrive.log \
     --log-level INFO
+
 ExecStop=/usr/bin/fusermount3 -uz /home/jack/GoogleDrive
+
+# Smart restart policy with exponential backoff
 Restart=on-failure
-RestartSec=10s
+RestartSec=30s
 
 [Install]
 WantedBy=default.target

@@ -1,0 +1,47 @@
+#!/usr/bin/env bash
+# Atomic workspace scene switcher for Hyprland
+# Switches all 4 monitors to a workspace "column" simultaneously
+
+set -euo pipefail
+
+if [[ $# -ne 1 ]]; then
+    echo "Usage: hypr-scene <1|2|3>" >&2
+    echo "  1 = Column 1 (workspaces 1,2,3,4)" >&2
+    echo "  2 = Column 2 (workspaces 5,6,7,8)" >&2
+    echo "  3 = Column 3 (workspaces 9,10,11,12)" >&2
+    exit 1
+fi
+
+case "$1" in
+    1)
+        # Column 1: Left=1, Main=2, Right=3, TV=4
+        WORKSPACES=(1 2 3 4)
+        ;;
+    2)
+        # Column 2: Left=5, Main=6, Right=7, TV=8
+        WORKSPACES=(5 6 7 8)
+        ;;
+    3)
+        # Column 3: Left=9, Main=10, Right=11, TV=12
+        WORKSPACES=(9 10 11 12)
+        ;;
+    *)
+        echo "Invalid scene: $1. Must be 1, 2, or 3." >&2
+        exit 1
+        ;;
+esac
+
+# Monitor order: DP-1 (left), DP-3 (main), DP-2 (right), HDMI-A-1 (TV)
+MONITORS=(DP-1 DP-3 DP-2 HDMI-A-1)
+
+# Build batch command (much faster than individual hyprctl calls)
+BATCH_COMMANDS=""
+for i in {0..3}; do
+    BATCH_COMMANDS+="dispatch focusmonitor ${MONITORS[$i]} ; "
+    BATCH_COMMANDS+="dispatch workspace ${WORKSPACES[$i]} ; "
+done
+# Final focus back to main monitor
+BATCH_COMMANDS+="dispatch focusmonitor DP-3"
+
+# Execute all commands in one hyprctl call using batch mode
+exec hyprctl --batch "$BATCH_COMMANDS"

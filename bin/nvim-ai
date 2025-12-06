@@ -1,0 +1,3 @@
+#!/usr/bin/env bash
+# Launch Neovim with API keys injected from 1Password
+exec op run --no-masking -- nvim "$@"

@@ -1,0 +1,203 @@
+#!/usr/bin/env bash
+# backup-cloud - Cloud backup using rclone to Google Drive
+# Part of Jack's backup system (Tier 1)
+
+set -euo pipefail
+
+# Configuration
+RCLONE_REMOTE="gdrive:backups/arch-$(hostname)"
+SOURCE_HOME="/home/jack"
+TIMESTAMP=$(date +%Y%m%d_%H%M%S)
+LOG_FILE="/home/backup/daily/cloud-backup.log"
+RCLONE_LOG="/home/backup/daily/rclone_${TIMESTAMP}.log"
+
+# Directories to back up
+BACKUP_DIRS=(
+    "dotfiles"
+    "codex-sys"
+    "ChosenLocal"
+    "Documents"
+    "Desktop/main/scripts"
+    ".config"
+    ".local/bin"
+    ".local/share"
+)
+
+# Exclusion patterns (same as local backup, plus some extras)
+EXCLUDE_PATTERNS=(
+    # System caches
+    ".cache/**"
+    "**/*.cache"
+    ".thumbnails/**"
+
+    # Browser caches and temp files
+    ".config/Chromium/*/Cache/**"
+    ".config/Chromium/*/Code Cache/**"
+    ".config/Chromium/*/GPUCache/**"
+    ".config/Chromium/*/Service Worker/**"
+    ".config/Chromium/*/VideoDecodeStats/**"
+    ".config/google-chrome/*/Cache/**"
+    ".config/google-chrome/*/Code Cache/**"
+    ".config/Code/Cache/**"
+    ".config/Code/CachedData/**"
+    ".config/Code/logs/**"
+    ".config/cursor/Cache/**"
+    ".config/cursor/CachedData/**"
+    ".config/cursor/logs/**"
+
+    # Development build artifacts
+    "**/node_modules/**"
+    "**/__pycache__/**"
+    "**/*.pyc"
+    "**/.pytest_cache/**"
+    "**/target/**"
+    "**/dist/**"
+    "**/build/**"
+    "**/.next/**"
+    "**/.nuxt/**"
+    "**/.venv/**"
+    "**/venv/**"
+    "**/.tox/**"
+
+    # IDE and editor temp files
+    ".vscode/extensions/**"
+    "**/.idea/**"
+    "**/*.swp"
+    "**/*.swo"
+    "**/*~"
+    "**/.DS_Store"
+
+    # Large media/download caches
+    ".local/share/Trash/**"
+    ".local/share/baloo/**"
+
+    # Docker and container data
+    ".local/share/containers/**"
+    ".local/share/docker/**"
+
+    # Steam and games
+    ".steam/**"
+    ".local/share/Steam/**"
+
+    # Temp and log files
+    "**/*.log"
+    "**/*.tmp"
+    "**/.tmp/**"
+    "**/tmp/**"
+)
+
+# Build rclone filter arguments
+FILTER_FILE=$(mktemp)
+trap "rm -f $FILTER_FILE" EXIT
+
+for pattern in "${EXCLUDE_PATTERNS[@]}"; do
+    echo "- $pattern" >> "$FILTER_FILE"
+done
+
+# Function to send notification
+notify() {
+    local title="$1"
+    local message="$2"
+    local urgency="${3:-normal}"
+
+    if command -v notify-send &>/dev/null; then
+        notify-send -u "$urgency" "$title" "$message"
+    fi
+}
+
+# Function to log with timestamp
+log() {
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*" | tee -a "$LOG_FILE"
+}
+
+# Check if rclone remote is accessible
+check_remote() {
+    log "Checking rclone remote access..."
+
+    if ! rclone about "$RCLONE_REMOTE" &>/dev/null; then
+        log "ERROR: Cannot access rclone remote: $RCLONE_REMOTE"
+        notify "Backup Failed" "Cannot access Google Drive. Check rclone config." "critical"
+        exit 1
+    fi
+
+    local remote_info=$(rclone about "$RCLONE_REMOTE" --json 2>/dev/null)
+    local used=$(echo "$remote_info" | jq -r '.used' | numfmt --to=iec 2>/dev/null || echo "unknown")
+    local free=$(echo "$remote_info" | jq -r '.free' | numfmt --to=iec 2>/dev/null || echo "unknown")
+
+    log "Remote storage - Used: $used | Free: $free"
+}
+
+# Main backup logic
+main() {
+    log "=========================================="
+    log "Starting cloud backup: ${TIMESTAMP}"
+    log "Destination: ${RCLONE_REMOTE}"
+    log "=========================================="
+
+    # Check remote access
+    check_remote
+
+    # Notify start
+    notify "Cloud Backup Started" "Uploading to Google Drive..." "normal"
+
+    # Perform backup
+    local failed_dirs=()
+    local total_transferred=0
+
+    for dir in "${BACKUP_DIRS[@]}"; do
+        local src="${SOURCE_HOME}/${dir}"
+
+        if [ ! -e "$src" ]; then
+            log "Warning: Source directory does not exist: $src"
+            continue
+        fi
+
+        log "Syncing: $dir"
+
+        # Use rclone sync with --backup-dir for versioning
+        local backup_dir="${RCLONE_REMOTE}-archive/$(date +%Y-%m)/backup_${TIMESTAMP}"
+
+        if rclone sync \
+            --filter-from="$FILTER_FILE" \
+            --backup-dir="$backup_dir" \
+            --stats-one-line \
+            --stats=30s \
+            --transfers=4 \
+            --checkers=8 \
+            --log-file="$RCLONE_LOG" \
+            --log-level=INFO \
+            --progress \
+            "$src" \
+            "${RCLONE_REMOTE}/$(basename "$dir")" 2>&1 | tee -a "$LOG_FILE"; then
+
+            log "  ✓ Completed: $dir"
+        else
+            log "  ✗ Failed: $dir"
+            failed_dirs+=("$dir")
+        fi
+    done
+
+    # Parse rclone log for statistics
+    if [ -f "$RCLONE_LOG" ]; then
+        local transferred=$(grep -oP 'Transferred:\s+\K[^\s]+' "$RCLONE_LOG" | tail -1 || echo "0")
+        log "Total transferred: $transferred"
+    fi
+
+    log "=========================================="
+
+    # Send notification
+    if [ ${#failed_dirs[@]} -eq 0 ]; then
+        log "Cloud backup completed successfully!"
+        notify "Cloud Backup Complete" "All files synced to Google Drive" "normal"
+    else
+        log "Cloud backup completed with errors!"
+        log "Failed directories: ${failed_dirs[*]}"
+        notify "Cloud Backup Warning" "Backup completed with errors\nFailed: ${failed_dirs[*]}" "critical"
+    fi
+
+    # Cleanup old rclone logs (keep last 30 days)
+    find /home/backup/daily -name "rclone_*.log" -mtime +30 -delete 2>/dev/null || true
+}
+
+# Run main function
+main "$@"
